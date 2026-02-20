@@ -1,0 +1,35 @@
+# Salmon-based pipeline config
+samples_tsv: "metadata/samples.tsv"
+
+ref:
+  transcriptome_fasta: "ref/gencode.transcriptome.fa"
+  gtf: "ref/gencode.annotation.gtf"
+  salmon_index: "ref/salmon_index_gencode_v49"
+
+threads:
+  fastqc: 4
+  fastp: 4
+  salmon: 4
+
+fastp:
+  extra: "--detect_adapter_for_pe --cut_front --cut_tail --cut_window_size 4 --cut_mean_quality 20 --length_required 30"
+
+salmon:
+  extra: ""
+  kmer: 31
+
+checkpoint_genes:
+  - CD274
+  - PDCD1LG2
+  - PDCD1
+  - CTLA4
+  - LAG3
+  - TIGIT
+  - HAVCR2
+  - BTLA
+  - VSIR
+  - IDO1
+  - CD276
+  - VTCN1
+  - CD80
+  - CD86
