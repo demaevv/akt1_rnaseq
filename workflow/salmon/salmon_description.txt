@@ -1,0 +1,13 @@
+FASTQ
+  ↓
+FastQC
+  ↓
+fastp
+  ↓
+Salmon transcript quantification
+  ↓
+tximport
+  ↓
+DESeq2
+  ↓
+checkpoint summary + PCA
