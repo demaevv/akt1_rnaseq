@@ -1,324 +1,365 @@
-# 🧬 AKT1 Inhibitor RNA-seq Project
-## STAR-based analysis of immune checkpoint regulation in myeloid cell lines
+# 🧬 AKT1 RNA-seq Project  
+## Molecular mechanisms of PU-001 response in MDS-relevant myeloid cell models
 
-This repository contains a **classical bulk RNA-seq workflow** for studying the transcriptional response to **PU-001**, a putative **AKT1 inhibitor**, in three MDS-relevant myeloid cell lines:
+This repository contains a reproducible RNA-seq analysis framework for studying the effects of the novel AKT1 inhibitor **PU-001** on immune checkpoint-associated transcriptional and pathway-level programs in myelodysplastic syndrome (MDS)-relevant myeloid cell models.
 
-- **KG-1**
-- **Mono-Mac-1**
-- **THP-1**
+The project integrates two independent RNA-seq quantification strategies:
 
-The main biological goal is to test whether **AKT1 inhibition is associated with reduced expression of immune checkpoint genes**, including **CD274 (PD-L1)**, **HAVCR2 (TIM-3)**, **PDCD1**, **PDCD1LG2**, **CTLA4**, **LAG3**, **TIGIT**, **BTLA**, **VSIR**, **CD80**, **CD86**, **CD276**, **VTCN1**, and **IDO1**.
+- ⭐ **STAR + featureCounts + DESeq2**
+- 🐟 **Salmon + tximport + DESeq2**
 
----
+and extends them with downstream:
 
-## ✨ Project summary
-
-### Biological question
-Does treatment with **PU-001** reduce immune checkpoint-associated transcriptional programs in MDS-related myeloid cell lines?
-
-### Experimental design
-Each cell line contains **3 biological replicates**, each with a matched **control** and **treated** sample:
-
-- **KG-1**: K1–K6
-- **Mono-Mac-1**: M7–M12
-- **THP-1**: T13–T18
-
-Treatment conditions:
-
-- **CTRL** — untreated cells
-- **PU001** — cells treated with **200 µM PU-001 for 24 h**
-
-### Main hypothesis
-**AKT1 inhibition leads to downregulation of checkpoint genes at the transcriptomic level.**
+- 🧠 checkpoint-focused interpretation
+- 🧭 pathway enrichment analysis
+- 📊 ORA / Enrichr / preranked GSEA
+- 🔬 mechanistic hypothesis generation
 
 ---
 
-## 🧪 Pipeline overview
+## 🎯 Biological question
 
-This repository uses a **STAR-based RNA-seq pipeline**:
+Does pharmacological AKT1 inhibition by **PU-001** remodel immune checkpoint-associated expression programs in MDS-relevant myeloid cell models?
 
-1. **FastQC** — raw read quality control
-2. **fastp** — adapter and quality trimming
-3. **STAR genome index generation**
-4. **STAR alignment**
-5. **samtools sort + index**
-6. **featureCounts** — gene-level counting
-7. **DESeq2** — differential expression analysis
-8. **Checkpoint-focused summary and heatmap**
-9. **MultiQC** — consolidated QC report
+More specifically, the project asks whether PU-001 affects:
+
+- **PD-L1 axis** — `CD274`, `PDCD1LG2`
+- **TIM-3 axis** — `HAVCR2`, `LGALS9`
+- **B7 family molecules** — `CD80`, `CD86`, `CD276`
+- **alternative checkpoint regulators** — `VSIR`, `CTLA4`, `LAG3`, `IDO1`, `BTLA`
+- pathway-level programs related to **PI3K/AKT/mTOR**, **IFN/JAK-STAT**, **NF-κB**, antigen presentation, cell cycle, translation, and stress adaptation
 
 ---
 
-## 📌 What each file does
+## 🧪 Experimental design
 
-### `Snakefile`
-Main Snakemake workflow definition. Controls the full execution order from raw FASTQ files to final DESeq2 outputs.
+The RNA-seq dataset contains **18 paired-end libraries**:
 
-### `config.yaml`
-Stores project-wide configuration:
-- sample sheet path
-- genome FASTA path
-- GTF annotation path
-- STAR index path
-- thread settings
-- featureCounts parameters
+| Cell line | Control | PU-001, 200 μM, 24 h | Replicates |
+|---|---|---|---|
+| KG-1 | K1, K3, K5 | K2, K4, K6 | 3 + 3 |
+| Mono-Mac-1 | M7, M9, M11 | M8, M10, M12 | 3 + 3 |
+| THP-1 | T13, T15, T17 | T14, T16, T18 | 3 + 3 |
 
-### `metadata/samples.tsv`
-Sample metadata table containing:
-- `sample_id`
-- `fq1`
-- `fq2`
-- `cell_line`
-- `treatment`
-- `replicate`
+The cell lines represent distinct myeloid / monocytic differentiation contexts:
 
-### `scripts/get_ref.sh`
-Downloads and prepares:
-- **GRCh38 primary assembly genome FASTA**
-- matching **GENCODE annotation GTF**
+- **KG-1** — immature AML-like model with elevated basal TIM-3 / PD-L1
+- **Mono-Mac-1** — myelomonocytic model
+- **THP-1** — monocytic model
 
-### `scripts/featurecounts_to_tsv.py`
-Converts raw `featureCounts` output into a tidy count matrix with columns matching `sample_id`.
-
-### `scripts/deseq2_pipeline.R`
-Runs:
-- global DESeq2 model
-- per-cell-line DESeq2 models
-- PCA
-- checkpoint summary table
-- checkpoint heatmap
+For THP-1 and Mono-Mac-1, IFN-γ was used to induce checkpoint expression before evaluating the effect of PU-001.
 
 ---
 
-## 🚀 How to run the project
+## ⚙️ Workflow overview
 
-## 1️⃣ Create the software environment
+### 1️⃣ Input data
 
-Recommended with **mamba**:
-
-```bash
-mamba create -n rnaseq -c conda-forge -c bioconda -y \
-  python=3.11 \
-  snakemake \
-  fastqc multiqc fastp \
-  star samtools subread \
-  r-base=4.3 \
-  bioconductor-deseq2 \
-  r-data.table r-ggplot2 r-pheatmap \
-  bioconductor-rtracklayer
-conda activate rnaseq
-```
-
-If `mamba` is unavailable, replace it with `conda`.
-
----
-
-## 2️⃣ Place raw FASTQ files
-
-Put all paired-end FASTQ files into:
+Place paired-end FASTQ files into:
 
 ```text
-fastq/
+data/raw/
 ```
-
-Example filenames:
-
-```text
-Unknown_CQ888-001U0001_1.fq.gz
-Unknown_CQ888-001U0001_2.fq.gz
-...
-Unknown_CQ888-001U0018_1.fq.gz
-Unknown_CQ888-001U0018_2.fq.gz
-```
-
----
-
-## 3️⃣ Prepare `metadata/samples.tsv`
-
-The file should look like this:
-
-```tsv
-sample_id	fq1	fq2	cell_line	treatment	replicate
-K1	fastq/Unknown_CQ888-001U0001_1.fq.gz	fastq/Unknown_CQ888-001U0001_2.fq.gz	KG-1	CTRL	1
-K2	fastq/Unknown_CQ888-001U0002_1.fq.gz	fastq/Unknown_CQ888-001U0002_2.fq.gz	KG-1	PU001	1
-K3	fastq/Unknown_CQ888-001U0003_1.fq.gz	fastq/Unknown_CQ888-001U0003_2.fq.gz	KG-1	CTRL	2
-K4	fastq/Unknown_CQ888-001U0004_1.fq.gz	fastq/Unknown_CQ888-001U0004_2.fq.gz	KG-1	PU001	2
-...
-```
-
----
-
-## 4️⃣ Download the reference genome and annotation
-
-Run:
-
-```bash
-bash scripts/get_ref.sh 49 comprehensive ref
-```
-
-This prepares:
-
-- `ref/GRCh38.primary_assembly.genome.fa`
-- `ref/gencode.annotation.gtf`
-
-> ⚠️ The FASTA and GTF must match in **assembly** and **release**.
-
----
-
-## 5️⃣ Review `config.yaml`
 
 Example:
 
-```yaml
-samples_tsv: "metadata/samples.tsv"
+```text
+data/raw/Unknown_CQ888-001U0001_1.fq.gz
+data/raw/Unknown_CQ888-001U0001_2.fq.gz
+```
 
-ref:
-  fasta: "ref/GRCh38.primary_assembly.genome.fa"
-  gtf:   "ref/gencode.annotation.gtf"
-  star_index: "ref/STAR_GRCh38"
+Sample metadata are defined in:
 
-threads:
-  star: 12
-  fastqc: 4
-  featureCounts: 8
+```text
+config/samples.tsv
+```
 
-featurecounts:
-  extra: "-p -B -C -t exon -g gene_id"
+Recommended shared sample-sheet format:
+
+```tsv
+sample_id	client_id	cell_line	treatment	replicate	fq1	fq2
+K1	CQ888-001U0001	KG-1	CTRL	1	data/raw/Unknown_CQ888-001U0001_1.fq.gz	data/raw/Unknown_CQ888-001U0001_2.fq.gz
+K2	CQ888-001U0002	KG-1	PU001	1	data/raw/Unknown_CQ888-001U0002_1.fq.gz	data/raw/Unknown_CQ888-001U0002_2.fq.gz
+K3	CQ888-001U0003	KG-1	CTRL	2	data/raw/Unknown_CQ888-001U0003_1.fq.gz	data/raw/Unknown_CQ888-001U0003_2.fq.gz
+K4	CQ888-001U0004	KG-1	PU001	2	data/raw/Unknown_CQ888-001U0004_1.fq.gz	data/raw/Unknown_CQ888-001U0004_2.fq.gz
 ```
 
 ---
 
-## 6️⃣ Run a dry run first
+## ⭐ STAR-based branch
+
+The STAR branch implements a classical genome-alignment workflow:
+
+```text
+FASTQ
+  ↓
+FastQC
+  ↓
+fastp
+  ↓
+STAR genome alignment
+  ↓
+samtools sort/index
+  ↓
+featureCounts
+  ↓
+DESeq2
+  ↓
+checkpoint summary + heatmaps + PCA
+```
+
+### Main files
+
+```text
+workflow/star/Snakefile
+workflow/star/scripts/get_ref.sh
+workflow/star/scripts/featurecounts_to_tsv.py
+workflow/star/scripts/deseq2_pipeline.R
+config/star.yaml
+```
+
+### Run STAR workflow
 
 ```bash
-snakemake -n -p
+snakemake \
+  -s workflow/star/Snakefile \
+  --configfile config/star.yaml \
+  --cores 12 \
+  -p \
+  --rerun-incomplete \
+  --latency-wait 60
 ```
 
-This checks planned jobs and dependencies without executing anything.
+### Expected outputs
+
+```text
+results/star/fastqc/
+results/star/trimmed/
+results/star/bam/
+results/star/counts/gene_counts.tsv
+results/star/deseq2/DE_KG-1_PU001_vs_CTRL.tsv
+results/star/deseq2/DE_Mono-Mac-1_PU001_vs_CTRL.tsv
+results/star/deseq2/DE_THP-1_PU001_vs_CTRL.tsv
+results/star/deseq2/checkpoints_summary.tsv
+results/star/multiqc/multiqc_report.html
+```
 
 ---
 
-## 7️⃣ Run the full workflow
+## 🐟 Salmon-based branch
+
+The Salmon branch implements transcript-aware quantification:
+
+```text
+FASTQ
+  ↓
+FastQC
+  ↓
+fastp
+  ↓
+Salmon transcript quantification
+  ↓
+tximport
+  ↓
+DESeq2
+  ↓
+checkpoint summary + PCA
+```
+
+### Main files
+
+```text
+workflow/salmon/Snakefile
+workflow/salmon/scripts/get_transcriptome.sh
+workflow/salmon/scripts/tximport_deseq2.R
+config/salmon.yaml
+```
+
+### Run Salmon workflow
 
 ```bash
-snakemake --cores 12 -p --rerun-incomplete --latency-wait 60 --keep-going
+snakemake \
+  -s workflow/salmon/Snakefile \
+  --configfile config/salmon.yaml \
+  --cores 12 \
+  -p \
+  --rerun-incomplete \
+  --latency-wait 60
+```
+
+### Expected outputs
+
+```text
+results/salmon/fastqc/
+results/salmon/trimmed/
+results/salmon/quant/
+results/salmon/deseq2/DE_KG-1_PU001_vs_CTRL.tsv
+results/salmon/deseq2/DE_Mono-Mac-1_PU001_vs_CTRL.tsv
+results/salmon/deseq2/DE_THP-1_PU001_vs_CTRL.tsv
+results/salmon/deseq2/checkpoints_summary.tsv
+results/salmon/multiqc/multiqc_report.html
 ```
 
 ---
 
-## 🔬 Workflow details
+## 🧠 Checkpoint gene panel
 
-### 🟢 Rule: `fastqc_raw`
-Runs **FastQC** on raw paired-end reads.
+The checkpoint gene panel is stored in:
 
-Outputs:
-- `results/fastqc/raw/<sample>_1_fastqc.html`
-- `results/fastqc/raw/<sample>_2_fastqc.html`
+```text
+config/checkpoint_genes.txt
+```
 
-### ✂️ Rule: `fastp_trim`
-Runs **fastp** trimming.
+Core genes:
 
-Outputs:
-- `results/trimmed/<sample>_1.fq.gz`
-- `results/trimmed/<sample>_2.fq.gz`
-- `results/fastp/<sample>.html`
-- `results/fastp/<sample>.json`
+```text
+CD274
+HAVCR2
+LAG3
+CTLA4
+CD276
+VSIR
+CD80
+CD86
+PDCD1
+PDCD1LG2
+IDO1
+BTLA
+LGALS9
+TNFRSF14
+```
 
-### 🧱 Rule: `star_index`
-Builds the STAR reference index once.
+The checkpoint summary is designed to answer:
 
-Output:
-- `ref/STAR_GRCh38/`
-
-### 🎯 Rule: `star_align`
-Runs STAR alignment, then sorts and indexes BAM files with samtools.
-
-Outputs:
-- `results/star/<sample>.Aligned.sortedByCoord.out.bam`
-- `results/star/<sample>.Aligned.sortedByCoord.out.bam.bai`
-- `results/star/<sample>.Log.final.out`
-
-### 🔢 Rule: `featurecounts`
-Counts reads at the gene level using **featureCounts**.
-
-Output:
-- `results/counts/gene_counts.tsv`
-
-### 📊 Rule: `deseq2`
-Runs DESeq2 globally and per cell line.
-
-Outputs:
-- `results/deseq2/DE_allCellLines_treatment.tsv`
-- `results/deseq2/DE_KG-1_PU001_vs_CTRL.tsv`
-- `results/deseq2/DE_Mono-Mac-1_PU001_vs_CTRL.tsv`
-- `results/deseq2/DE_THP-1_PU001_vs_CTRL.tsv`
-- `results/deseq2/checkpoints_summary.tsv`
-- `results/deseq2/figures/PCA_vst.png`
-- `results/deseq2/figures/checkpoints_heatmap.png`
-
-### 📎 Rule: `multiqc`
-Collects QC and alignment statistics into one HTML report.
-
-Output:
-- `results/multiqc/multiqc_report.html`
+> Does PU-001 reduce checkpoint-associated gene expression, and is the effect reproducible across quantification strategies?
 
 ---
 
-## 🧠 How to interpret the outputs
+## 📊 Cross-pipeline comparison
 
-### `results/deseq2/checkpoints_summary.tsv`
-This is the key file for testing the central hypothesis.
+The key analytical principle of this project is **cross-pipeline reproducibility**.
 
-It summarizes, for each checkpoint gene and each cell line:
-- `log2FoldChange`
-- `pvalue`
-- `padj`
-- support for the expected **downregulation after PU001**
+A checkpoint change is treated as high-confidence if:
 
-### `results/deseq2/DE_*`
-Full DE tables for downstream interpretation, pathway analysis, and figure generation.
-
-### `results/deseq2/figures/checkpoints_heatmap.png`
-A checkpoint-focused heatmap based on VST-normalized expression.
-
-### `results/multiqc/multiqc_report.html`
-A unified quality-control report.
+1. the gene is detected in both STAR and Salmon branches;
+2. the direction of change is the same;
+3. the adjusted p-value supports statistical significance;
+4. the result is biologically interpretable in the context of pathway analysis.
 
 ---
 
-## 🧬 Recommended interpretation strategy
+## 🧭 Pathway enrichment analysis
 
-To support the hypothesis, prioritize genes showing:
+Pathway analysis is performed after obtaining DESeq2 tables.
 
-- **negative log2FoldChange**
-- **adjusted p-value (`padj`) < 0.05**
-- consistent downregulation across **KG-1**, **Mono-Mac-1**, and **THP-1**
+Scripts:
 
-Pay particular attention to:
-- **CD274 (PD-L1)**
-- **HAVCR2 (TIM-3)**
-- **PDCD1**
-- **PDCD1LG2**
-- **CTLA4**
-- **LAG3**
-- **TIGIT**
-- **BTLA**
-- **VSIR**
-- **CD80**
-- **CD86**
-- **CD276**
-- **VTCN1**
-- **IDO1**
+```text
+workflow/pathway_enrichment/scripts/pathway_analysis_kg1.py
+workflow/pathway_enrichment/scripts/pathway_analysis_monomac1.py
+workflow/pathway_enrichment/scripts/pathway_analysis_thp1.py
+```
+
+Each script performs:
+
+- filtering by `padj < 0.05` and `|log2FC| ≥ 1`
+- top-200 UP and DOWN gene selection
+- ORA using MSigDB-style collections
+- Enrichr-based cross-validation
+- preranked GSEA using the full ranked gene list
+- dotplots, barplots, GSEA running plots
+- markdown report generation
+
+### Recommended input placement
+
+The pathway scripts should read STAR-based DESeq2 tables from:
+
+```text
+results/star/deseq2/
+```
+
+Recommended paths:
+
+```text
+results/star/deseq2/DE_KG-1_PU001_vs_CTRL.tsv
+results/star/deseq2/DE_Mono-Mac-1_PU001_vs_CTRL.tsv
+results/star/deseq2/DE_THP-1_PU001_vs_CTRL.tsv
+```
+
+### Run pathway analysis
+
+```bash
+python workflow/pathway_enrichment/scripts/pathway_analysis_kg1.py
+python workflow/pathway_enrichment/scripts/pathway_analysis_monomac1.py
+python workflow/pathway_enrichment/scripts/pathway_analysis_thp1.py
+```
+
+Expected output directories:
+
+```text
+results/pathway_enrichment/KG1/
+results/pathway_enrichment/MonoMac1/
+results/pathway_enrichment/THP1/
+```
 
 ---
 
-## 🤝 Acknowledgments
+## 🚀 Quick start
 
-This repository was developed for an academic bioinformatics project focused on **AKT1 inhibition in MDS-related myeloid cell lines** and its relationship to **immune checkpoint regulation**.
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/demaevv/akt1_rnaseq.git
+cd akt1_rnaseq
+```
+
+### 2. Create the main environment
+
+```bash
+mamba env create -f environment.yml
+conda activate akt1_rnaseq
+```
+
+### 3. Prepare input data
+
+Place FASTQ files into:
+
+```text
+data/raw/
+```
+
+Update:
+
+```text
+config/samples.tsv
+```
+
+### 4. Run STAR branch
+
+```bash
+snakemake -s workflow/star/Snakefile --configfile config/star.yaml --cores 12 -p
+```
+
+### 5. Run Salmon branch
+
+```bash
+snakemake -s workflow/salmon/Snakefile --configfile config/salmon.yaml --cores 12 -p
+```
+
+### 6. Run pathway enrichment
+
+```bash
+python workflow/pathway_enrichment/scripts/pathway_analysis_kg1.py
+python workflow/pathway_enrichment/scripts/pathway_analysis_monomac1.py
+python workflow/pathway_enrichment/scripts/pathway_analysis_thp1.py
+```
 
 ---
 
 ## 👤 Author
 
-Maintained by: **Alexey Demaev**  
-Affiliation: **ITMO University** 
+**Alexey Demaev**  
+M4235, Bioinformatics and Systems Biology  
+ITMO University
+
+GitHub: [@demaevv](https://github.com/demaevv)
