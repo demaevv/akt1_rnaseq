@@ -1,0 +1,104 @@
+import pandas as pd
+import os
+
+configfile: "config.yaml"
+
+SAMPLES = pd.read_csv(config["samples_tsv"], sep="\t")
+SAMPLES["sample_id"] = SAMPLES["sample_id"].astype(str)
+
+def fq1(wc):
+    return SAMPLES.set_index("sample_id").loc[wc.sample, "fq1"]
+
+def fq2(wc):
+    return SAMPLES.set_index("sample_id").loc[wc.sample, "fq2"]
+
+rule all:
+    input:
+        "results/counts/gene_counts.tsv",
+        expand("results/star/{sample}.Aligned.sortedByCoord.out.bam.bai", sample=SAMPLES["sample_id"]),
+        "results/deseq2/DE_allCellLines_treatment.tsv",
+        expand("results/deseq2/DE_{cell}_PU001_vs_CTRL.tsv", cell=sorted(SAMPLES["cell_line"].unique())),
+        "results/deseq2/checkpoints_summary.tsv",
+        "results/deseq2/figures/PCA_vst.png",
+        "results/deseq2/figures/checkpoints_heatmap.png"
+
+rule star_index:
+    input:
+        fasta=config["ref"]["fasta"],
+        gtf=config["ref"]["gtf"]
+    output:
+        directory(config["ref"]["star_index"])
+    threads: config["threads"]["star"]
+    shell:
+        """
+        mkdir -p {output}
+        STAR --runThreadN {threads} --runMode genomeGenerate \
+             --genomeDir {output} --genomeFastaFiles {input.fasta} \
+             --sjdbGTFfile {input.gtf} --sjdbOverhang 149 \
+             --genomeSAsparseD 2
+        """
+
+rule star_align:
+    input:
+        idx=rules.star_index.output,
+        r1="results/trimmed/{sample}_1.fq.gz",
+        r2="results/trimmed/{sample}_2.fq.gz"
+    output:
+        bam="results/star/{sample}.Aligned.sortedByCoord.out.bam",
+        bai="results/star/{sample}.Aligned.sortedByCoord.out.bam.bai",
+        log="results/star/{sample}.Log.final.out"
+    threads: config["threads"]["star"]
+    shell:
+        """
+        mkdir -p results/star
+        # 1) Align -> unsorted BAM
+        STAR --runThreadN {threads} \
+             --genomeDir {input.idx} \
+             --readFilesIn {input.r1} {input.r2} \
+             --readFilesCommand zcat \
+             --outFileNamePrefix results/star/{wildcards.sample}. \
+             --outSAMtype BAM Unsorted \
+             --quantMode GeneCounts
+
+        # 2) Sort -> EXACT filename expected by downstream rules
+        samtools sort -@ 4 -m 2G \
+          -o {output.bam} \
+          results/star/{wildcards.sample}.Aligned.out.bam
+
+        # 3) Index
+        samtools index -@ 4 {output.bam}
+        """
+
+rule featurecounts:
+    input:
+        bams=expand("results/star/{sample}.Aligned.sortedByCoord.out.bam", sample=SAMPLES["sample_id"]),
+        gtf=config["ref"]["gtf"]
+    output:
+        "results/counts/gene_counts.tsv"
+    threads: config["threads"]["featureCounts"]
+    params:
+        extra=config["featurecounts"]["extra"]
+    shell:
+        """
+        mkdir -p results/counts
+        featureCounts -T {threads} -a {input.gtf} -o results/counts/_tmp.txt {params.extra} {input.bams}
+        # Переведём в tidy TSV: gene_id + counts per sample
+        python scripts/featurecounts_to_tsv.py results/counts/_tmp.txt {output}
+        """
+
+rule deseq2:
+    input:
+        counts="results/counts/gene_counts.tsv",
+        meta=config["samples_tsv"],
+        gtf=config["ref"]["gtf"]
+    output:
+        "results/deseq2/DE_allCellLines_treatment.tsv",
+        expand("results/deseq2/DE_{cell}_PU001_vs_CTRL.tsv", cell=sorted(SAMPLES["cell_line"].unique())),
+        "results/deseq2/checkpoints_summary.tsv",
+        "results/deseq2/figures/PCA_vst.png",
+        "results/deseq2/figures/checkpoints_heatmap.png"
+    shell:
+        """
+        mkdir -p results/deseq2/figures
+        Rscript scripts/deseq2_pipeline.R {input.counts} {input.meta} {input.gtf} results/deseq2
+        """
