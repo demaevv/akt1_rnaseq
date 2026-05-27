@@ -1,0 +1,15 @@
+FASTQ
+  ↓
+QC + trimming
+  ↓
+STAR branch        Salmon branch
+  ↓                ↓
+featureCounts      tximport
+  ↓                ↓
+DESeq2             DESeq2
+  ↓                ↓
+checkpoint comparison
+  ↓
+pathway enrichment
+  ↓
+mechanistic interpretation
