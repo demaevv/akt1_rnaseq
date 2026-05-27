@@ -1,0 +1,15 @@
+FASTQ
+  ↓
+FastQC
+  ↓
+fastp
+  ↓
+STAR genome alignment
+  ↓
+samtools sort/index
+  ↓
+featureCounts
+  ↓
+DESeq2
+  ↓
+checkpoint summary + heatmaps + PCA
