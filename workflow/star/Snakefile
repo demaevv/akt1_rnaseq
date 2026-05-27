@@ -14,6 +14,7 @@ def fq2(wc):
 
 rule all:
     input:
+        "results/multiqc/multiqc_report.html",
         "results/counts/gene_counts.tsv",
         expand("results/star/{sample}.Aligned.sortedByCoord.out.bam.bai", sample=SAMPLES["sample_id"]),
         "results/deseq2/DE_allCellLines_treatment.tsv",
@@ -21,6 +22,43 @@ rule all:
         "results/deseq2/checkpoints_summary.tsv",
         "results/deseq2/figures/PCA_vst.png",
         "results/deseq2/figures/checkpoints_heatmap.png"
+
+rule fastqc_raw:
+    input:
+        r1=fq1,
+        r2=fq2
+    output:
+        html1="results/fastqc/raw/{sample}_1_fastqc.html",
+        zip1="results/fastqc/raw/{sample}_1_fastqc.zip",
+        html2="results/fastqc/raw/{sample}_2_fastqc.html",
+        zip2="results/fastqc/raw/{sample}_2_fastqc.zip",
+    threads: config["threads"]["fastqc"]
+    shell:
+        """
+        mkdir -p results/fastqc/raw
+        fastqc -t {threads} -o results/fastqc/raw {input.r1} {input.r2}
+        """
+
+rule fastp_trim:
+    input:
+        r1=fq1,
+        r2=fq2
+    output:
+        r1="results/trimmed/{sample}_1.fq.gz",
+        r2="results/trimmed/{sample}_2.fq.gz",
+        html="results/fastp/{sample}.html",
+        json="results/fastp/{sample}.json",
+    params:
+        q=config["trimming"]["fastp"]["qualified_quality_phred"],
+        l=config["trimming"]["fastp"]["length_required"]
+    threads: 8
+    shell:
+        """
+        mkdir -p results/trimmed results/fastp
+        fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} \
+              --qualified_quality_phred {params.q} --length_required {params.l} \
+              --thread {threads} --html {output.html} --json {output.json}
+        """
 
 rule star_index:
     input:
@@ -60,7 +98,7 @@ rule star_align:
              --outSAMtype BAM Unsorted \
              --quantMode GeneCounts
 
-        # 2) Sort -> EXACT filename expected by downstream rules
+        # 2) Sort
         samtools sort -@ 4 -m 2G \
           -o {output.bam} \
           results/star/{wildcards.sample}.Aligned.out.bam
@@ -82,7 +120,6 @@ rule featurecounts:
         """
         mkdir -p results/counts
         featureCounts -T {threads} -a {input.gtf} -o results/counts/_tmp.txt {params.extra} {input.bams}
-        # Переведём в tidy TSV: gene_id + counts per sample
         python scripts/featurecounts_to_tsv.py results/counts/_tmp.txt {output}
         """
 
@@ -101,4 +138,18 @@ rule deseq2:
         """
         mkdir -p results/deseq2/figures
         Rscript scripts/deseq2_pipeline.R {input.counts} {input.meta} {input.gtf} results/deseq2
+        """
+
+rule multiqc:
+    input:
+        expand("results/fastqc/raw/{sample}_1_fastqc.zip", sample=SAMPLES["sample_id"]),
+        expand("results/fastqc/raw/{sample}_2_fastqc.zip", sample=SAMPLES["sample_id"]),
+        expand("results/fastp/{sample}.json", sample=SAMPLES["sample_id"]),
+        expand("results/star/{sample}.Log.final.out", sample=SAMPLES["sample_id"])
+    output:
+        "results/multiqc/multiqc_report.html"
+    shell:
+        """
+        mkdir -p results/multiqc
+        multiqc -o results/multiqc results/fastqc results/fastp results/star
         """
