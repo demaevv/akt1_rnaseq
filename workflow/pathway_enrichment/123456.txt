@@ -1,1 +1,8 @@
-123456
+Each script performs:
+- filtering by padj < 0.05 and |log2FC| ≥ 1
+- top-200 UP and DOWN gene selection
+- ORA using MSigDB-style collections
+- Enrichr-based cross-validation
+- preranked GSEA using the full ranked gene list
+- dotplots, barplots, GSEA running plots
+- markdown report generation
